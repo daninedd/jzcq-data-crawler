@@ -1,0 +1,11 @@
+package com.caile.jczq.data.crawler;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.querydsl.QuerydslPredicateExecutor;
+
+/**@author denglei
+ * Created by Administrator on 2018/3/14.
+ */
+public interface HistoryLeagueDataRepository extends JpaRepository<HistoryLeagueData,Long>,QuerydslPredicateExecutor<HistoryLeagueData>{
+
+}
