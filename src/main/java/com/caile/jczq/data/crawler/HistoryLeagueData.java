@@ -4,6 +4,7 @@ import lombok.Data;
 import org.hibernate.annotations.DynamicUpdate;
 
 import javax.persistence.*;
+import java.util.Date;
 
 /**@author denglei
  * Created by Administrator on 2018/3/14.
@@ -14,6 +15,7 @@ import javax.persistence.*;
 @DynamicUpdate
 
 public class HistoryLeagueData {
+
     @SequenceGenerator(name = "caile_x_history_league_id_sequence",sequenceName = "caile_x_history_league_id_sequence")
     @GeneratedValue(generator = "caile_x_history_league_id_sequence")
     @Id
@@ -25,7 +27,7 @@ public class HistoryLeagueData {
     private String country;
 
     /**
-     *国家logo
+     *国家logo_url
      * */
     private String logo;
 
@@ -38,4 +40,14 @@ public class HistoryLeagueData {
      * 联赛Id：mid
      * */
     private Long mId;
+
+    /**
+     * 联赛链接
+     * */
+    private String uri;
+
+    /**
+     * 创建时间
+     * */
+    private Date creationTime;
 }

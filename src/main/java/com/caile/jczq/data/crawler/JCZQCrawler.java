@@ -47,9 +47,10 @@ public class JCZQCrawler {
     @Resource
     private ResourceLoader             resourceLoader;
 
-    @PostConstruct
+//    @PostConstruct
     @SneakyThrows
     public void craw() {
+        System.exit(0);
         HttpClient httpClient = HttpClientBuilder.create().build();
         HttpPost httppost = new HttpPost("http://info.sporttery.cn/football/history/action.php");
         String[] blocks = IOUtils.toString(resourceLoader.getResource("classpath:league-api-params.list").getInputStream(), "UTF-8").split("#");
@@ -310,16 +311,16 @@ public class JCZQCrawler {
         }
     }
 
-    @PostConstruct
-    @SneakyThrows
-    public void leagueCraw(){
-
-        System.out.println("123");
-        System.exit(0);
-        HttpClient httpClient = HttpClientBuilder.create().build();
-        HttpGet httpGet = new HttpGet("http://info.sporttery.cn/football/history/history_data.php?mid=127");
-
-    }
+//    @PostConstruct
+//    @SneakyThrows
+//    public void leagueCraw(){
+//
+//        System.out.println("123");
+//        System.exit(0);
+//        HttpClient httpClient = HttpClientBuilder.create().build();
+//        HttpGet httpGet = new HttpGet("http://info.sporttery.cn/football/history/data_center.php");
+//
+//    }
 
     public static String convertUnicode(String ori) {
         char aChar;

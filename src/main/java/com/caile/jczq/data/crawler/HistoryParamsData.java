@@ -88,4 +88,23 @@ public class HistoryParamsData {
      *type2
      * */
     private String type2;
+    /**
+     * 联赛或者杯赛
+     */
+    //@Enumerated(EnumType.STRING)
+    private String isLeague;
+
+//    public enum isLeague {
+//        Table("联赛"), Cup("杯赛");
+//
+//        private final String text;
+//
+//        isLeague(String text) {
+//            this.text = text;
+//        }
+//
+//        public String text() {
+//            return this.text;
+//        }
+//    }
 }
