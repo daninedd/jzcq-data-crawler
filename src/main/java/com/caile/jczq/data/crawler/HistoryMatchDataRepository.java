@@ -6,3 +6,4 @@ public interface HistoryMatchDataRepository extends JpaRepository<HistoryMatchDa
 
     HistoryMatchData findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek(String homeTeam,String AwayTeam,String LeagueName,String Season,String Week);
 }
+

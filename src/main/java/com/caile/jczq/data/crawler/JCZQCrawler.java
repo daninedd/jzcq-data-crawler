@@ -47,7 +47,7 @@ public class JCZQCrawler {
     @Resource
     private ResourceLoader             resourceLoader;
 
-//    @PostConstruct
+ //   @PostConstruct
     @SneakyThrows
     public void craw() {
         System.exit(0);

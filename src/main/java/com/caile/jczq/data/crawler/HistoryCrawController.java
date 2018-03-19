@@ -12,11 +12,15 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.net.URI;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
@@ -82,7 +86,7 @@ public class HistoryCrawController {
 
     @RequestMapping("/match")
     @SneakyThrows
-    public String match(){
+    public @ResponseBody String match(){
         String www = "http://info.sporttery.cn/football/history/";
         HttpClient httpClient = HttpClientBuilder.create().build();
         Iterable<String> iterable = historyLeagueDataRepository.findUri();
@@ -93,8 +97,12 @@ public class HistoryCrawController {
             String url = iterator.next();
             String urls = www+url;
             iterator.remove();
-            HttpGet httpGet = new HttpGet(urls);
-            HttpResponse httpResponse = httpClient.execute(httpGet);
+            //HttpGet httpGet = new HttpGet(urls);
+            URL url_end = new URL(urls);
+            URI uri = new URI(url_end.getProtocol(), url_end.getHost(), url_end.getPath(), url_end.getQuery(), null);
+            //HttpClient client    = new DefaultHttpClient();
+            HttpGet httpget = new HttpGet(uri);
+            HttpResponse httpResponse = httpClient.execute(httpget);
             HttpEntity entity = httpResponse.getEntity();
             String body = EntityUtils.toString(entity, "gb2312");
 
@@ -105,7 +113,30 @@ public class HistoryCrawController {
             Elements season_lists = season_list.getElementsByTag("li");
             //获取联赛轮次
             Element league_num = document.select("div.league_num").first();
+
+            //检查是否轮有轮次--只采集联赛
+            if(league_num == null){
+
+                continue;
+            }
+
             Elements tds = league_num.getElementsByTag("td");
+
+            //获取js里的变量值
+            Elements e = document.getElementsByAttributeValueContaining("language","JavaScript");
+            Element attrs = e.first();
+
+            String attr = attrs.data();
+            String[] att = attr.split("\r\n");
+
+            for (String at: att
+                 ) {
+                if (at.contains("var")){
+
+                }
+
+            }
+
 
             //准备数据
             String[] action = {"lc","three_-1_e"};//竞彩终赔
@@ -131,6 +162,7 @@ public class HistoryCrawController {
                 for (String[] act: actions) {
 
 
+
                 }
 
                 //循环比赛轮次/添加竞彩终赔
@@ -143,10 +175,11 @@ public class HistoryCrawController {
 
 
             }
+            System.out.println(url);
 
 
         }
 
-        return "11";
+        return "asda";
     }
 }
