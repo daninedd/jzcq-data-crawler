@@ -47,10 +47,9 @@ public class JCZQCrawler {
     @Resource
     private ResourceLoader             resourceLoader;
 
- //   @PostConstruct
+    //@PostConstruct
     @SneakyThrows
     public void craw() {
-        System.exit(0);
         HttpClient httpClient = HttpClientBuilder.create().build();
         HttpPost httppost = new HttpPost("http://info.sporttery.cn/football/history/action.php");
         String[] blocks = IOUtils.toString(resourceLoader.getResource("classpath:league-api-params.list").getInputStream(), "UTF-8").split("#");
@@ -141,171 +140,171 @@ public class JCZQCrawler {
                         break;
                     }
 
-                    SAXParserFactory factory = SAXParserFactory.newInstance();
-                    SAXParser parser = factory.newSAXParser();
-                    XMLReader reader = parser.getXMLReader();
-                    List<List<String>> matches = new ArrayList<>();
-                    reader.setContentHandler(new DefaultHandler() {
-
-                        private List<String> match;
-
-                        @Override
-                        public void startElement(String uri, String localName, String qName, Attributes atts) throws SAXException {
-                            if (qName.equals("td")) {
-                                if (match == null) {
-                                    match = new ArrayList<>();
-                                }
-                            }
-                        }
-
-                        @Override
-                        public void endElement(String uri, String localName, String qName) throws SAXException {
-                            if (qName.equals("tr")) {
-                                if (match != null) {
-                                    if (14 == match.size()) {
-                                        matches.add(match);
-                                    }
-                                    match = null;
-                                }
-                            }
-                        }
-
-                        @Override
-                        public void characters(char[] ch, int start, int length) throws SAXException {
-                            if (match != null) {
-                                String s = new String(ch, start, length).trim().replaceAll("   ", " ");
-                                if (s.startsWith("\\u")) {
-                                    s = convertUnicode(s);
-                                }
-                                if(s.equals("一 一 一")){
-                                    match.add("一");
-                                    match.add("一");
-                                    match.add("一");
-                                }else {
-                                    match.add(s);
-                                }
-                            }
-                        }
-                    });
-                    reader.parse(new InputSource(IOUtils.toInputStream(body, "UTF-8")));
+//                    SAXParserFactory factory = SAXParserFactory.newInstance();
+//                    SAXParser parser = factory.newSAXParser();
+//                    XMLReader reader = parser.getXMLReader();
+//                    List<List<String>> matches = new ArrayList<>();
+//                    reader.setContentHandler(new DefaultHandler() {
+//
+//                        private List<String> match;
+//
+//                        @Override
+//                        public void startElement(String uri, String localName, String qName, Attributes atts) throws SAXException {
+//                            if (qName.equals("td")) {
+//                                if (match == null) {
+//                                    match = new ArrayList<>();
+//                                }
+//                            }
+//                        }
+//
+//                        @Override
+//                        public void endElement(String uri, String localName, String qName) throws SAXException {
+//                            if (qName.equals("tr")) {
+//                                if (match != null) {
+//                                    if (14 == match.size()) {
+//                                        matches.add(match);
+//                                    }
+//                                    match = null;
+//                                }
+//                            }
+//                        }
+//
+//                        @Override
+//                        public void characters(char[] ch, int start, int length) throws SAXException {
+//                            if (match != null) {
+//                                String s = new String(ch, start, length).trim().replaceAll("   ", " ");
+//                                if (s.startsWith("\\u")) {
+//                                    s = convertUnicode(s);
+//                                }
+//                                if(s.equals("一 一 一")){
+//                                    match.add("一");
+//                                    match.add("一");
+//                                    match.add("一");
+//                                }else {
+//                                    match.add(s);
+//                                }
+//                            }
+//                        }
+//                    });
+                    //reader.parse(new InputSource(IOUtils.toInputStream(body, "UTF-8")));
                       //      System.out.println(body);
                     //        System.out.println(list);
-                    try {
-                        if (matches.size() > 0) {
-                            for (List<String> match : matches) {
-
-                                HistoryMatchData historyMatchData = new HistoryMatchData();
-                                historyMatchData.setHomeTeam(match.get(2));
-                                historyMatchData.setAwayTeam(match.get(5));
-                                String[] fullScore = match.get(4).split(":");
-                                historyMatchData.setFullHomeScore(Long.valueOf(fullScore[0]));
-                                historyMatchData.setFullAwayScore(Long.valueOf(fullScore[1]));
-
-                                //更新获胜球队
-                                if(Long.valueOf(fullScore[0]) > Long.valueOf(fullScore[1])){
-                                    historyMatchData.setWinTeam(match.get(2));
-                                }else if(Long.valueOf(fullScore[0]) < Long.valueOf(fullScore[1])){
-                                    historyMatchData.setWinTeam(match.get(5));
-                                }else{
-                                    historyMatchData.setWinTeam("平");
-                                }
-
-                                //更新赛季
-                                historyMatchData.setSeason(season);
-                                //更新联赛名称
-                                historyMatchData.setLeagueName(leagueName);
-                                //更新比赛轮次
-                                historyMatchData.setWeek(String.valueOf(i));
-
-                                //update by dl--更新半场各队得分
-                                String[] halfSocre = match.get(3).split(":");
-                                historyMatchData.setHalfHomeScore(Long.valueOf(halfSocre[0]));
-                                historyMatchData.setHalfAwayScore(Long.valueOf(halfSocre[1]));
-
-                                historyMatchData.setMatchDate(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(match.get(0)));
-
-                                //update by dl--区分终赔和初赔更新
-                                String endOrStart = params.get(11).getValue();
-                                String last = endOrStart.substring(endOrStart.length()-1,endOrStart.length());
-
-                                if(last.equals("s")){//初赔
-
-                                    historyMatchData = historyMatchDataRepository.findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek
-                                                (match.get(2),match.get(5),leagueName,season,String.valueOf(i));
-
-                                    if(historyMatchData!=null){
-
-                                        try {
-                                            historyMatchData.setJczqWinFirstOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
-                                        } catch (Exception ex) {
-                                            //忽略数字异常
-                                        }
-                                        try {
-                                            historyMatchData.setJczqDrawFirstOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
-                                        } catch (Exception ex) {
-                                            //忽略数字异常
-                                        }
-                                        try {
-                                            historyMatchData.setJczqLossFirstOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
-                                        } catch (Exception ex) {
-                                            //忽略数字异常
-                                        }
-                                    }else{
-
-                                        continue;
-                                    }
-
-                                }else if(last.equals("e")){//终赔
-                                    try {
-                                        historyMatchData.setJczqWinFinalOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
-                                    } catch (Exception ex) {
-                                        //忽略数字异常
-                                    }
-                                    try {
-                                        historyMatchData.setJczqDrawFinalOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
-                                    } catch (Exception ex) {
-                                        //忽略数字异常
-                                    }
-                                    try {
-                                        historyMatchData.setJczqLossFinalOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
-                                    } catch (Exception ex) {
-                                        //忽略数字异常
-                                    }
-
-                                }else{
-
-                                    System.out.println("未知type1");
-                                    System.exit(-1);
-                                }
-                                historyMatchDataRepository.save(historyMatchData);
-                            }
-                            //将已经采集过数据的list存进数据库，防止多次采集
-                            HistoryParamsData historyParamsData = new HistoryParamsData();
-                            historyParamsData.setLeagueName(seasonAndName);
-                            historyParamsData.setAction(action);
-                            historyParamsData.setCId(c_id);
-                            historyParamsData.setCompetitionId(competition_id);
-                            historyParamsData.setSId(s_id);
-                            historyParamsData.setRId(r_id);
-                            historyParamsData.setGId(g_id);
-                            historyParamsData.setTableType(table_type);
-                            historyParamsData.setOrderType(order_type);
-                            historyParamsData.setGroups(groups);
-                            historyParamsData.setRoundType(round_type);
-                            historyParamsData.setType1(type1);
-                            historyParamsData.setType2(type2);
-                            historyParamsData.setLeagueName(seasonAndName);
-                            historyParamsData.setLeagueName(seasonAndName);
-                            historyParamsData.setWeek(i);
-                            historyParamsDataRepository.save(historyParamsData);
-                        } else {
-                            i = -1;
-                        }
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                        System.out.println(body);
-                        System.exit(0);
-                    }
+//                    try {
+//                        if (matches.size() > 0) {
+//                            for (List<String> match : matches) {
+//
+//                                HistoryMatchData historyMatchData = new HistoryMatchData();
+//                                historyMatchData.setHomeTeam(match.get(2));
+//                                historyMatchData.setAwayTeam(match.get(5));
+//                                String[] fullScore = match.get(4).split(":");
+//                                historyMatchData.setFullHomeScore(Long.valueOf(fullScore[0]));
+//                                historyMatchData.setFullAwayScore(Long.valueOf(fullScore[1]));
+//
+//                                //更新获胜球队
+//                                if(Long.valueOf(fullScore[0]) > Long.valueOf(fullScore[1])){
+//                                    historyMatchData.setWinTeam(match.get(2));
+//                                }else if(Long.valueOf(fullScore[0]) < Long.valueOf(fullScore[1])){
+//                                    historyMatchData.setWinTeam(match.get(5));
+//                                }else{
+//                                    historyMatchData.setWinTeam("平");
+//                                }
+//
+//                                //更新赛季
+//                                historyMatchData.setSeason(season);
+//                                //更新联赛名称
+//                                historyMatchData.setLeagueName(leagueName);
+//                                //更新比赛轮次
+//                                historyMatchData.setWeek(String.valueOf(i));
+//
+//                                //update by dl--更新半场各队得分
+//                                String[] halfSocre = match.get(3).split(":");
+//                                historyMatchData.setHalfHomeScore(Long.valueOf(halfSocre[0]));
+//                                historyMatchData.setHalfAwayScore(Long.valueOf(halfSocre[1]));
+//
+//                                historyMatchData.setMatchDate(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(match.get(0)));
+//
+//                                //update by dl--区分终赔和初赔更新
+//                                String endOrStart = params.get(11).getValue();
+//                                String last = endOrStart.substring(endOrStart.length()-1,endOrStart.length());
+//
+//                                if(last.equals("s")){//初赔
+//
+//                                    historyMatchData = historyMatchDataRepository.findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek
+//                                                (match.get(2),match.get(5),leagueName,season,String.valueOf(i));
+//
+//                                    if(historyMatchData!=null){
+//
+//                                        try {
+//                                            historyMatchData.setJczqWinFirstOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
+//                                        } catch (Exception ex) {
+//                                            //忽略数字异常
+//                                        }
+//                                        try {
+//                                            historyMatchData.setJczqDrawFirstOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
+//                                        } catch (Exception ex) {
+//                                            //忽略数字异常
+//                                        }
+//                                        try {
+//                                            historyMatchData.setJczqLossFirstOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
+//                                        } catch (Exception ex) {
+//                                            //忽略数字异常
+//                                        }
+//                                    }else{
+//
+//                                        continue;
+//                                    }
+//
+//                                }else if(last.equals("e")){//终赔
+//                                    try {
+//                                        historyMatchData.setJczqWinFinalOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
+//                                    } catch (Exception ex) {
+//                                        //忽略数字异常
+//                                    }
+//                                    try {
+//                                        historyMatchData.setJczqDrawFinalOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
+//                                    } catch (Exception ex) {
+//                                        //忽略数字异常
+//                                    }
+//                                    try {
+//                                        historyMatchData.setJczqLossFinalOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
+//                                    } catch (Exception ex) {
+//                                        //忽略数字异常
+//                                    }
+//
+//                                }else{
+//
+//                                    System.out.println("未知type1");
+//                                    System.exit(-1);
+//                                }
+//                                historyMatchDataRepository.save(historyMatchData);
+//                            }
+//                            //将已经采集过数据的list存进数据库，防止多次采集
+//                            HistoryParamsData historyParamsData = new HistoryParamsData();
+//                            historyParamsData.setLeagueName(seasonAndName);
+//                            historyParamsData.setAction(action);
+//                            historyParamsData.setCId(c_id);
+//                            historyParamsData.setCompetitionId(competition_id);
+//                            historyParamsData.setSId(s_id);
+//                            historyParamsData.setRId(r_id);
+//                            historyParamsData.setGId(g_id);
+//                            historyParamsData.setTableType(table_type);
+//                            historyParamsData.setOrderType(order_type);
+//                            historyParamsData.setGroups(groups);
+//                            historyParamsData.setRoundType(round_type);
+//                            historyParamsData.setType1(type1);
+//                            historyParamsData.setType2(type2);
+//                            historyParamsData.setLeagueName(seasonAndName);
+//                            historyParamsData.setLeagueName(seasonAndName);
+//                            historyParamsData.setWeek(i);
+//                            historyParamsDataRepository.save(historyParamsData);
+//                        } else {
+//                            i = -1;
+//                        }
+//                    } catch (Exception ex) {
+//                        ex.printStackTrace();
+//                        System.out.println(body);
+//                        System.exit(0);
+//                    }
                 }
             }
         }
@@ -349,7 +348,7 @@ public class JCZQCrawler {
                             value = (value << 4) + aChar - '0';
                             break;
                         case 'a':
-                        case 'b':
+                        case 'b':/**/
                         case 'c':
                         case 'd':
                         case 'e':
