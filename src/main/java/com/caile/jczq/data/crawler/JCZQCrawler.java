@@ -321,7 +321,7 @@ public class JCZQCrawler {
 //
 //    }
 
-    public static String convertUnicode(String ori) {
+/*    public static String convertUnicode(String ori) {
         char aChar;
         int len = ori.length();
         StringBuffer outBuffer = new StringBuffer(len);
@@ -348,7 +348,7 @@ public class JCZQCrawler {
                             value = (value << 4) + aChar - '0';
                             break;
                         case 'a':
-                        case 'b':/**/
+                        case 'b':*//**//*
                         case 'c':
                         case 'd':
                         case 'e':
@@ -384,5 +384,5 @@ public class JCZQCrawler {
                 outBuffer.append(aChar);
         }
         return outBuffer.toString();
-    }
+    }*/
 }

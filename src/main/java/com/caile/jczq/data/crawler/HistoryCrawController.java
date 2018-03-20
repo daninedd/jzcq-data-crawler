@@ -141,6 +141,7 @@ public class HistoryCrawController {
                 String[] att = attr.split("\r\n");
 
                 Long g_id=0L;
+                Long r_id=0L;
                 String table_type = "";
                 String order_type = "";
                 Long groups = 0L;
@@ -157,6 +158,11 @@ public class HistoryCrawController {
                             at = at.trim();
                             at = at.substring(at.indexOf("g_id=")+5,at.lastIndexOf(";"));
                             g_id = Long.valueOf(at);
+                        }
+                        if(at.contains("r_id=")){
+                            at = at.trim();
+                            at = at.substring(at.indexOf("r_id=")+5,at.lastIndexOf(";"));
+                            r_id = Long.valueOf(at);
                         }
                         if(at.contains("table_type='")){
                             at = at.trim();
@@ -204,7 +210,7 @@ public class HistoryCrawController {
                 Long c_id;
                 Long competition_id = Long.valueOf(url.substring(url.indexOf("mid=")+4).trim());
                 c_id = competition_id;
-                Long r_id = Long.valueOf(document.select("table.league_name.seasons td").first().id());
+                //Long r_id = Long.valueOf(document.select("table.league_name.seasons td").first().id());
 
                 //先循环赛季
                 for (Element element: season_lists) {
@@ -279,14 +285,15 @@ public class HistoryCrawController {
         for (HistoryParamsData historyParamsData: historyParamsDataList) {
             int i = 0;
             while (i != -1){
-
+                i++;
                 //组装参数
                 List<NameValuePair> params = new ArrayList<>();
                 String seasonAndName = historyParamsData.getLeagueName();
-                String leagueName = seasonAndName.substring(0,seasonAndName.length()-9);
-                String season = seasonAndName.substring(seasonAndName.length()-9,seasonAndName.length());
-
+                String leagueName = seasonAndName.substring(0,seasonAndName.indexOf("20"));
+                String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
                 String action  = historyParamsData.getAction();
+
+                System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+i);
                 Long cId  = historyParamsData.getCId();
                 Long competitionId  = historyParamsData.getCompetitionId();
                 Long gId = historyParamsData.getGId();
@@ -415,10 +422,7 @@ public class HistoryCrawController {
                             historyMatchData.setMatchDate(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(match.get(0)));
 
                             //update by dl--区分终赔和初赔更新
-                            String endOrStart = params.get(11).getValue();
-                            String last = endOrStart.substring(endOrStart.length()-1,endOrStart.length());
-
-                            if(last.equals("s")){//初赔
+                            if(action.equals("bc")){//初赔
 
                                 historyMatchData = historyMatchDataRepository.findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek
                                         (match.get(2),match.get(5),leagueName,season,String.valueOf(i));
@@ -445,7 +449,7 @@ public class HistoryCrawController {
                                     continue;
                                 }
 
-                            }else if(last.equals("e")){//终赔
+                            }else if(action.equals("lc")){//终赔
                                 try {
                                     historyMatchData.setJczqWinFinalOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
                                 } catch (Exception ex) {
@@ -486,6 +490,7 @@ public class HistoryCrawController {
                         historyParamsDatax.setType2(type2);
                         historyParamsDatax.setLeagueName(seasonAndName);
                         historyParamsDatax.setWeek(i);
+                        historyParamsDatax.setIsOk(1);
                         historyParamsDataRepository.save(historyParamsData);
                     } else {
                         i = -1;
@@ -498,8 +503,6 @@ public class HistoryCrawController {
             }
 
         }
-
-
 
         return "ok";
     }
