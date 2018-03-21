@@ -95,6 +95,11 @@ public class HistoryParamsData {
     private Integer isOk;
 
     /**
+     *总轮次
+     * */
+    private Integer totalNums;
+
+    /**
      * 联赛或者杯赛
      */
     @Enumerated(EnumType.STRING)

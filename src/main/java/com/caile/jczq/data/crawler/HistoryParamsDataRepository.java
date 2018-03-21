@@ -10,7 +10,7 @@ import java.util.List;
  * Created by Administrator on 2018/3/13.
  */
 public interface HistoryParamsDataRepository extends JpaRepository<HistoryParamsData,Long>,QuerydslPredicateExecutor<HistoryParamsData> {
-
+//
 //    @Query("select action,CId,competitionId,GId,groups,orderType,RId,roundType,SId,tableType,type1,type2,week from HistoryParamsData where isOk = 0")
 //    List<String> findData();
 }

@@ -6,7 +6,6 @@ import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
-import org.apache.http.ParseException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
@@ -29,14 +28,11 @@ import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 import org.xml.sax.helpers.DefaultHandler;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -108,14 +104,13 @@ public class HistoryCrawController {
     @RequestMapping("/league_match")
     @SneakyThrows
     public @ResponseBody String league_match(){
+
         String www = "http://info.sporttery.cn/football/history/";
         HttpClient httpClient = HttpClientBuilder.create().build();
         Iterable<String> iterable = historyLeagueDataRepository.findUri();
-
         Iterator<String> iterator = iterable.iterator();
-
-
         try {
+
             while (iterator.hasNext()){
                 String url = iterator.next();
                 String urls = www+url;
@@ -133,74 +128,9 @@ public class HistoryCrawController {
                 Element season_list = document.getElementById("season_list");
                 Elements season_lists = season_list.getElementsByTag("li");
 
-                //获取js里的变量值
-                Elements e = document.getElementsByAttributeValueContaining("language","JavaScript");
-                Element attrs = e.first();
-
-                String attr = attrs.data();
-                String[] att = attr.split("\r\n");
-
-                Long g_id=0L;
-                Long r_id=0L;
-                String table_type = "";
-                String order_type = "";
-                Long groups = 0L;
-                String round_type = "";
-                String type2 = "asia_229_e";
-                HistoryParamsData.IsLeague isLeagueEnum = null;
-
-
-                for (String at: att
-                     ) {
-                    if (at.contains("var")){
-
-                        if(at.contains("g_id=")){
-                            at = at.trim();
-                            at = at.substring(at.indexOf("g_id=")+5,at.lastIndexOf(";"));
-                            g_id = Long.valueOf(at);
-                        }
-                        if(at.contains("r_id=")){
-                            at = at.trim();
-                            at = at.substring(at.indexOf("r_id=")+5,at.lastIndexOf(";"));
-                            r_id = Long.valueOf(at);
-                        }
-                        if(at.contains("table_type='")){
-                            at = at.trim();
-                            table_type = at.substring(at.indexOf("table_type='")+12,at.lastIndexOf("';"));
-                        }
-                        if(at.contains("order_type='")){
-                            at = at.trim();
-                            order_type = at.substring(at.indexOf("order_type='")+12,at.lastIndexOf("';"));
-                        }
-                        if(at.contains("groups=")){
-                            at = at.trim();
-                            at = at.substring(at.indexOf("groups=")+7,at.lastIndexOf(";"));
-                            groups = Long.valueOf(at);
-                        }
-                        if(at.contains("round_type='")){
-                            at = at.trim();
-                            round_type = at.substring(at.indexOf("round_type='")+12,at.lastIndexOf("';"));
-                        }
-                        if(at.contains("is_league='")){
-                            at = at.trim();
-                             String is_league = at.substring(at.indexOf("is_league='")+11,at.lastIndexOf("';"));
-                            if(is_league.equals("1")){
-
-                                isLeagueEnum = HistoryParamsData.IsLeague.Table;
-                            }else if(is_league.equals("0")){
-                                isLeagueEnum = HistoryParamsData.IsLeague.Cup;
-                            }
-                        }
-                    }
-                }
-
-                //只采集联赛
-                if(isLeagueEnum == HistoryParamsData.IsLeague.Cup || isLeagueEnum == null){
-                    continue;
-                }
                 //准备数据
-                String[] action = {"lc","three_-1_e"};//竞彩终赔
-                String[] action_bc = {"bc","three_-1_s"};//竞彩初赔
+                String[] action = {"lc","three_-1_e"};//联赛+竞彩终赔
+                String[] action_bc = {"bc","three_-1_s"};//联赛+竞彩初赔
 
                 List<String[]> actions = new ArrayList<>();
 
@@ -210,15 +140,97 @@ public class HistoryCrawController {
                 Long c_id;
                 Long competition_id = Long.valueOf(url.substring(url.indexOf("mid=")+4).trim());
                 c_id = competition_id;
-                //Long r_id = Long.valueOf(document.select("table.league_name.seasons td").first().id());
-
                 //先循环赛季
+                Long g_id=0L;
+                Long r_id=0L;
+                String table_type = "";
+                String order_type = "";
+                Long groups = 0L;
+                String round_type = "";
+                String type2 = "asia_229_e";
+                HistoryParamsData.IsLeague isLeagueEnum = null;
+
                 for (Element element: season_lists) {
 
                     Long s_id = Long.valueOf(element.id());
                     Elements a = element.getElementsByTag("a");
                     String season_and_name = a.html();
+                    String url_seasons = urls + "&s_id=" + String.valueOf(s_id);
+                    //System.out.println(url_seasons);
+                    URL url_season = new URL(url_seasons);
+                    URI uri_season = new URI(url_season.getProtocol(), url_season.getHost(), url_season.getPath(), url_season.getQuery(), null);
+                    HttpGet httpget_season = new HttpGet(uri_season);
+                    HttpResponse httpResponse_season = httpClient.execute(httpget_season);
+                    HttpEntity entity_season = httpResponse_season.getEntity();
+                    String body_season = EntityUtils.toString(entity_season, "gb2312");
 
+                    Document document_season = Jsoup.parse(body_season);
+
+                    //获取比赛总轮次
+                    Elements league_nums = document_season.select("div.league_num");
+                    if(league_nums.isEmpty()){
+                        continue;
+                    }
+                    Element league_num = league_nums.first();
+                    Elements tds = league_num.getElementsByTag("td");
+                    Integer totalnum = Integer.valueOf(tds.last().id());
+
+
+                    //获取js里的变量值
+                    Elements e = document_season.getElementsByAttributeValueContaining("language","JavaScript");
+                    Element attrs = e.first();
+
+                    String attr = attrs.data();
+                    String[] att = attr.split("\r\n");
+
+                    for (String at: att
+                            ) {
+                        if (at.contains("var")){
+
+                            if(at.contains("g_id=")){
+                                at = at.trim();
+                                at = at.substring(at.indexOf("g_id=")+5,at.lastIndexOf(";"));
+                                g_id = Long.valueOf(at);
+                            }
+                            if(at.contains("r_id=")){
+                                at = at.trim();
+                                at = at.substring(at.indexOf("r_id=")+5,at.lastIndexOf(";"));
+                                r_id = Long.valueOf(at);
+                            }
+                            if(at.contains("table_type='")){
+                                at = at.trim();
+                                table_type = at.substring(at.indexOf("table_type='")+12,at.lastIndexOf("';"));
+                            }
+                            if(at.contains("order_type='")){
+                                at = at.trim();
+                                order_type = at.substring(at.indexOf("order_type='")+12,at.lastIndexOf("';"));
+                            }
+                            if(at.contains("groups=")){
+                                at = at.trim();
+                                at = at.substring(at.indexOf("groups=")+7,at.lastIndexOf(";"));
+                                groups = Long.valueOf(at);
+                            }
+                            if(at.contains("round_type='")){
+                                at = at.trim();
+                                round_type = at.substring(at.indexOf("round_type='")+12,at.lastIndexOf("';"));
+                            }
+                            if(at.contains("is_league='")){
+                                at = at.trim();
+                                String is_league = at.substring(at.indexOf("is_league='")+11,at.lastIndexOf("';"));
+                                if(is_league.equals("1")){
+
+                                    isLeagueEnum = HistoryParamsData.IsLeague.Table;
+                                }else if(is_league.equals("0")){
+                                    isLeagueEnum = HistoryParamsData.IsLeague.Cup;
+                                }
+                            }
+                        }
+                    }
+
+                    //只采集联赛
+                    if(isLeagueEnum == HistoryParamsData.IsLeague.Cup || isLeagueEnum == null){
+                        continue;
+                    }
 
                     //循环初赔终赔
                     for (String[] act: actions) {
@@ -253,6 +265,7 @@ public class HistoryCrawController {
                         historyParamsData.setWeek(1);
                         historyParamsData.setIsLeague(isLeagueEnum);
                         historyParamsData.setIsOk(0);
+                        historyParamsData.setTotalNums(totalnum);
                         historyParamsDataRepository.save(historyParamsData);
                         System.out.println("开始处理"+season_and_name);
                     }
@@ -265,15 +278,20 @@ public class HistoryCrawController {
         return "完成11";
     }
 
-    @RequestMapping("/match_details")
+    @RequestMapping("/lc_match_details")
     @SneakyThrows
-    public @ResponseBody String match_details(){
+    public @ResponseBody String lc_match_details(){
 
         //获取数据库中未抓取过的联赛
         BooleanExpression preicate;
         QHistoryParamsData qHistoryParamsData = QHistoryParamsData.historyParamsData;
-        preicate = qHistoryParamsData.isOk.eq(0);
-        Iterable<HistoryParamsData> iterable = historyParamsDataRepository.findAll(preicate);
+        //先更新终赔
+        preicate = qHistoryParamsData.isOk.eq(0).and(qHistoryParamsData.action.eq("lc"));
+        List<Sort.Order> orders = new ArrayList<>();
+        orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"id"));
+        orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"action"));
+
+        Iterable<HistoryParamsData> iterable = historyParamsDataRepository.findAll(preicate,new Sort(orders));
 
         List<HistoryParamsData> historyParamsDataList = new ArrayList<>();
         iterable.forEach(historyData->{
@@ -283,9 +301,9 @@ public class HistoryCrawController {
         HttpClient httpClient = HttpClientBuilder.create().build();
         HttpPost httppost = new HttpPost("http://info.sporttery.cn/football/history/action.php");
         for (HistoryParamsData historyParamsData: historyParamsDataList) {
-            int i = 0;
-            while (i != -1){
-                i++;
+            Integer week = historyParamsData.getWeek();
+            //int i = 0;
+            while (week != -1){
                 //组装参数
                 List<NameValuePair> params = new ArrayList<>();
                 String seasonAndName = historyParamsData.getLeagueName();
@@ -293,7 +311,6 @@ public class HistoryCrawController {
                 String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
                 String action  = historyParamsData.getAction();
 
-                System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+i);
                 Long cId  = historyParamsData.getCId();
                 Long competitionId  = historyParamsData.getCompetitionId();
                 Long gId = historyParamsData.getGId();
@@ -317,7 +334,9 @@ public class HistoryCrawController {
                 params.add(new BasicNameValuePair("table_type",tableType));
                 params.add(new BasicNameValuePair("type1",type1));
                 params.add(new BasicNameValuePair("type2",type2));
-                params.add(new BasicNameValuePair("week",String.valueOf(i)));
+                params.add(new BasicNameValuePair("week",String.valueOf(week)));
+
+                System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+week);
 
                 httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
                 HttpResponse httpresponse = httpClient.execute(httppost);
@@ -412,7 +431,7 @@ public class HistoryCrawController {
                             //更新联赛名称
                             historyMatchData.setLeagueName(leagueName);
                             //更新比赛轮次
-                            historyMatchData.setWeek(String.valueOf(i));
+                            historyMatchData.setWeek(String.valueOf(week));
 
                             //update by dl--更新半场各队得分
                             String[] halfSocre = match.get(3).split(":");
@@ -421,79 +440,28 @@ public class HistoryCrawController {
 
                             historyMatchData.setMatchDate(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(match.get(0)));
 
-                            //update by dl--区分终赔和初赔更新
-                            if(action.equals("bc")){//初赔
-
-                                historyMatchData = historyMatchDataRepository.findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek
-                                        (match.get(2),match.get(5),leagueName,season,String.valueOf(i));
-
-                                if(historyMatchData!=null){
-
-                                    try {
-                                        historyMatchData.setJczqWinFirstOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
-                                    } catch (Exception ex) {
-                                        //忽略数字异常
-                                    }
-                                    try {
-                                        historyMatchData.setJczqDrawFirstOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
-                                    } catch (Exception ex) {
-                                        //忽略数字异常
-                                    }
-                                    try {
-                                        historyMatchData.setJczqLossFirstOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
-                                    } catch (Exception ex) {
-                                        //忽略数字异常
-                                    }
-                                }else{
-
-                                    continue;
-                                }
-
-                            }else if(action.equals("lc")){//终赔
-                                try {
-                                    historyMatchData.setJczqWinFinalOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
-                                } catch (Exception ex) {
-                                    //忽略数字异常
-                                }
-                                try {
-                                    historyMatchData.setJczqDrawFinalOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
-                                } catch (Exception ex) {
-                                    //忽略数字异常
-                                }
-                                try {
-                                    historyMatchData.setJczqLossFinalOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
-                                } catch (Exception ex) {
-                                    //忽略数字异常
-                                }
-
-                            }else{
-
-                                System.out.println("未知type1");
-                                System.exit(-1);
+                            try {
+                                historyMatchData.setJczqWinFinalOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
                             }
+                            try {
+                                historyMatchData.setJczqDrawFinalOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            try {
+                                historyMatchData.setJczqLossFinalOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+
                             historyMatchDataRepository.save(historyMatchData);
                         }
-                        //将已经采集过数据的list存进数据库，防止多次采集
-                        HistoryParamsData historyParamsDatax = new HistoryParamsData();
-                        historyParamsDatax.setLeagueName(seasonAndName);
-                        historyParamsDatax.setAction(action);
-                        historyParamsDatax.setCId(cId);
-                        historyParamsDatax.setCompetitionId(competitionId);
-                        historyParamsDatax.setSId(sId);
-                        historyParamsDatax.setRId(rId);
-                        historyParamsDatax.setGId(gId);
-                        historyParamsDatax.setTableType(tableType);
-                        historyParamsDatax.setOrderType(orderType);
-                        historyParamsDatax.setGroups(groups);
-                        historyParamsDatax.setRoundType(roundType);
-                        historyParamsDatax.setType1(type1);
-                        historyParamsDatax.setType2(type2);
-                        historyParamsDatax.setLeagueName(seasonAndName);
-                        historyParamsDatax.setWeek(i);
-                        historyParamsDatax.setIsOk(1);
-                        historyParamsDataRepository.save(historyParamsData);
+                        historyParamsData.setWeek(week);
+                        week++;
                     } else {
-                        i = -1;
+                        week = -1;
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
@@ -502,10 +470,15 @@ public class HistoryCrawController {
                 }
             }
 
-        }
+            historyParamsData.setIsOk(1);
+            historyParamsDataRepository.save(historyParamsData);
 
+
+        }
         return "ok";
     }
+
+
 
     public static String convertUnicode(String ori) {
         char aChar;
@@ -571,4 +544,6 @@ public class HistoryCrawController {
         }
         return outBuffer.toString();
     }
+
+
 }
