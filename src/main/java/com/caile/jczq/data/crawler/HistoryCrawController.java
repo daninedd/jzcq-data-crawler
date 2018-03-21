@@ -166,16 +166,6 @@ public class HistoryCrawController {
 
                     Document document_season = Jsoup.parse(body_season);
 
-                    //获取比赛总轮次
-                    Elements league_nums = document_season.select("div.league_num");
-                    if(league_nums.isEmpty()){
-                        continue;
-                    }
-                    Element league_num = league_nums.first();
-                    Elements tds = league_num.getElementsByTag("td");
-                    Integer totalnum = Integer.valueOf(tds.last().id());
-
-
                     //获取js里的变量值
                     Elements e = document_season.getElementsByAttributeValueContaining("language","JavaScript");
                     Element attrs = e.first();
@@ -225,6 +215,22 @@ public class HistoryCrawController {
                                 }
                             }
                         }
+
+                    }
+
+                    //获取比赛总轮次
+                    //常规赛还是普通联赛
+                    if(round_type.equals("cup")){
+                        //先获取常规赛轮次
+                    }else if(round_type.equals("table")){
+                        Elements league_nums = document_season.select("div.league_num");
+                        if(league_nums.isEmpty()){
+                            System.out.println(document_season);
+                            continue;
+                        }
+                        Element league_num = league_nums.first();
+                        Elements tds = league_num.getElementsByTag("td");
+                        Integer totalnum = Integer.valueOf(tds.last().id());
                     }
 
                     //只采集联赛
