@@ -1,5 +1,7 @@
 package com.caile.jczq.data.crawler;
 
+import com.caile.jczq.data.utill.DataUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import lombok.SneakyThrows;
 import org.apache.commons.io.IOUtils;
@@ -18,6 +20,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.codec.json.Jackson2CodecSupport;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -35,10 +38,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URL;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**@author denglei
  * Created by Administrator on 2018/3/14.
@@ -185,7 +185,12 @@ public class HistoryCrawController {
                             if(at.contains("r_id=")){
                                 at = at.trim();
                                 at = at.substring(at.indexOf("r_id=")+5,at.lastIndexOf(";"));
-                                r_id = Long.valueOf(at);
+                                if(at.equals("")){
+                                    System.out.println("RID为空"+season_and_name);
+                                    continue;
+                                }else{
+                                    r_id = Long.valueOf(at);
+                                }
                             }
                             if(at.contains("table_type='")){
                                 at = at.trim();
@@ -215,28 +220,50 @@ public class HistoryCrawController {
                                 }
                             }
                         }
+                    }
+                    Integer totalnum = 0;
 
+                    //只采集联赛
+                    if(isLeagueEnum == HistoryParamsData.IsLeague.Cup || isLeagueEnum == null){
+                        continue;
                     }
 
                     //获取比赛总轮次
                     //常规赛还是普通联赛
                     if(round_type.equals("cup")){
                         //先获取常规赛轮次
+                        HistoryParamsData historyParamsDatax = new HistoryParamsData();
+                        Element element1 = document_season.getElementsByAttributeValue("round_type","table").first();
+                        historyParamsDatax.setAction("round");
+                        historyParamsDatax.setCompetitionId(competition_id);
+                        historyParamsDatax.setCId(c_id);
+                        r_id = Long.valueOf(element1.id());
+                        historyParamsDatax.setRId(r_id);
+                        historyParamsDatax.setGId(g_id);
+                        historyParamsDatax.setTableType(table_type);
+                        historyParamsDatax.setOrderType(order_type);
+                        historyParamsDatax.setGroups(groups);
+                        historyParamsDatax.setRoundType("table");
+                        historyParamsDatax.setType1("three_-1_e");
+                        historyParamsDatax.setType2(type2);
+                        if(this.getTotalNums(historyParamsDatax) == null){
+                            continue;
+                        }else{
+                            totalnum = this.getTotalNums(historyParamsDatax);
+                        }
+
+
                     }else if(round_type.equals("table")){
                         Elements league_nums = document_season.select("div.league_num");
                         if(league_nums.isEmpty()){
-                            System.out.println(document_season);
+                            System.out.println("空leaguename:"+season_and_name);
                             continue;
                         }
                         Element league_num = league_nums.first();
                         Elements tds = league_num.getElementsByTag("td");
-                        Integer totalnum = Integer.valueOf(tds.last().id());
+                        totalnum = Integer.valueOf(tds.last().id());
                     }
 
-                    //只采集联赛
-                    if(isLeagueEnum == HistoryParamsData.IsLeague.Cup || isLeagueEnum == null){
-                        continue;
-                    }
 
                     //循环初赔终赔
                     for (String[] act: actions) {
@@ -304,116 +331,23 @@ public class HistoryCrawController {
             historyParamsDataList.add(historyData);
         });
 
-        HttpClient httpClient = HttpClientBuilder.create().build();
-        HttpPost httppost = new HttpPost("http://info.sporttery.cn/football/history/action.php");
         for (HistoryParamsData historyParamsData: historyParamsDataList) {
             Integer week = historyParamsData.getWeek();
-            //int i = 0;
+
+            String seasonAndName = historyParamsData.getLeagueName();
+            String leagueName = seasonAndName.substring(0,seasonAndName.indexOf("20"));
+            String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
+
+            Integer nums = historyParamsData.getTotalNums();
+
             while (week != -1){
-                //组装参数
-                List<NameValuePair> params = new ArrayList<>();
-                String seasonAndName = historyParamsData.getLeagueName();
-                String leagueName = seasonAndName.substring(0,seasonAndName.indexOf("20"));
-                String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
-                String action  = historyParamsData.getAction();
+                List<List<String>> matches;
+                matches = this.getMatch(historyParamsData,week);
 
-                Long cId  = historyParamsData.getCId();
-                Long competitionId  = historyParamsData.getCompetitionId();
-                Long gId = historyParamsData.getGId();
-                Long groups = historyParamsData.getGroups();
-                String orderType = historyParamsData.getOrderType();
-                Long rId = historyParamsData.getRId();
-                String roundType = historyParamsData.getRoundType();
-                Long sId = historyParamsData.getSId();
-                String tableType = historyParamsData.getTableType();
-                String type1 = historyParamsData.getType1();
-                String type2 = historyParamsData.getType2();
-                params.add(new BasicNameValuePair("action",action));
-                params.add(new BasicNameValuePair("c_id",String.valueOf(cId)));
-                params.add(new BasicNameValuePair("competition_id",String.valueOf(competitionId)));
-                params.add(new BasicNameValuePair("g_id",String.valueOf(gId)));
-                params.add(new BasicNameValuePair("groups",String.valueOf(groups)));
-                params.add(new BasicNameValuePair("order_type",orderType));
-                params.add(new BasicNameValuePair("r_id",String.valueOf(rId)));
-                params.add(new BasicNameValuePair("round_type",roundType));
-                params.add(new BasicNameValuePair("s_id",String.valueOf(sId)));
-                params.add(new BasicNameValuePair("table_type",tableType));
-                params.add(new BasicNameValuePair("type1",type1));
-                params.add(new BasicNameValuePair("type2",type2));
-                params.add(new BasicNameValuePair("week",String.valueOf(week)));
-
-                System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+week);
-
-                httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
-                HttpResponse httpresponse = httpClient.execute(httppost);
-                HttpEntity entity = httpresponse.getEntity();
-                //得到数据
-                String body = EntityUtils.toString(entity, "UTF-8");
-
-                if(body.contains("\"matches\":{\"result_str\":\" ") && body.lastIndexOf("<\\/table>\"")!=-1){
-
-                    body = body.substring(body.indexOf("\"matches\":{\"result_str\":\" "), body.lastIndexOf("<\\/table>\""));
-                    body = "<table>\n"
-                            + body.substring(body.indexOf("<tr>"))
-                            .replaceAll("\\\\r", "\n")
-                            .replaceAll("\\\\/", "/")
-                            .replaceAll("\\\\\"", "\"")
-                            .replaceAll("</liid>", "</li>")
-                            .replaceAll("&nbsp", "").replaceAll("gif\">", "gif\"/>")
-                            + "\n</table>";
-                }else{
-                    break;
-                }
-                SAXParserFactory factory = SAXParserFactory.newInstance();
-                SAXParser parser = factory.newSAXParser();
-                XMLReader reader = parser.getXMLReader();
-                List<List<String>> matches = new ArrayList<>();
-                reader.setContentHandler(new DefaultHandler() {
-
-                    private List<String> match;
-
-                    @Override
-                    public void startElement(String uri, String localName, String qName, Attributes atts) throws SAXException {
-                        if (qName.equals("td")) {
-                            if (match == null) {
-                                match = new ArrayList<>();
-                            }
-                        }
-                    }
-
-                    @Override
-                    public void endElement(String uri, String localName, String qName) throws SAXException {
-                        if (qName.equals("tr")) {
-                            if (match != null) {
-                                if (14 == match.size()) {
-                                    matches.add(match);
-                                }
-                                match = null;
-                            }
-                        }
-                    }
-
-                    @Override
-                    public void characters(char[] ch, int start, int length) throws SAXException {
-                        if (match != null) {
-                            String s = new String(ch, start, length).trim().replaceAll("   ", " ");
-                            if (s.startsWith("\\u")) {
-                                s = convertUnicode(s);
-                            }
-                            if(s.equals("一 一 一")){
-                                match.add("一");
-                                match.add("一");
-                                match.add("一");
-                            }else {
-                                match.add(s);
-                            }
-                        }
-                    }
-                });
-                reader.parse(new InputSource(IOUtils.toInputStream(body, "UTF-8")));
+                System.out.println("开始处理"+seasonAndName+"week::"+week);
 
                 try {
-                    if (matches.size() > 0) {
+                    if (matches != null && matches.size() > 0) {
                         for (List<String> match : matches) {
 
                             HistoryMatchData historyMatchData = new HistoryMatchData();
@@ -461,30 +395,196 @@ public class HistoryCrawController {
                             } catch (Exception ex) {
                                 //忽略数字异常
                             }
+                            HistoryMatchData xx =historyMatchDataRepository.findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek
+                                    (match.get(2),match.get(5), leagueName,season,String.valueOf(week));
 
-                            historyMatchDataRepository.save(historyMatchData);
+                            if(xx == null){
+                                historyMatchDataRepository.save(historyMatchData);
+                            }
+
+
+                        }
+                        if(week.equals(nums)){
+                            historyParamsData.setIsOk(1);
+                            historyParamsDataRepository.save(historyParamsData);
                         }
                         historyParamsData.setWeek(week);
+                        historyParamsDataRepository.save(historyParamsData);
                         week++;
                     } else {
                         week = -1;
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    System.out.println(body);
                     System.exit(0);
                 }
             }
-
-            historyParamsData.setIsOk(1);
-            historyParamsDataRepository.save(historyParamsData);
-
-
         }
         return "ok";
     }
 
+    //获取联赛轮次
+    @SneakyThrows
+    private Integer getTotalNums(HistoryParamsData historyParamsData){
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpPost httppost =  new HttpPost("http://info.sporttery.cn/football/history/action.php");
+        //组装参数
+        List<NameValuePair> params = new ArrayList<>();
+        String action  = historyParamsData.getAction();
 
+        Long cId  = historyParamsData.getCId();
+        Long competitionId  = historyParamsData.getCompetitionId();
+        Long gId = historyParamsData.getGId();
+        Long groups = historyParamsData.getGroups();
+        String orderType = historyParamsData.getOrderType();
+        Long rId = historyParamsData.getRId();
+        String roundType = historyParamsData.getRoundType();
+        Long sId = historyParamsData.getSId();
+        String tableType = historyParamsData.getTableType();
+        String type1 = historyParamsData.getType1();
+        String type2 = historyParamsData.getType2();
+        params.add(new BasicNameValuePair("action",action));
+        params.add(new BasicNameValuePair("c_id",String.valueOf(cId)));
+        params.add(new BasicNameValuePair("competition_id",String.valueOf(competitionId)));
+        params.add(new BasicNameValuePair("g_id",String.valueOf(gId)));
+        params.add(new BasicNameValuePair("groups",String.valueOf(groups)));
+        params.add(new BasicNameValuePair("order_type",orderType));
+        params.add(new BasicNameValuePair("r_id",String.valueOf(rId)));
+        params.add(new BasicNameValuePair("round_type",roundType));
+        params.add(new BasicNameValuePair("s_id",String.valueOf(sId)));
+        params.add(new BasicNameValuePair("table_type",tableType));
+        params.add(new BasicNameValuePair("type1",type1));
+        params.add(new BasicNameValuePair("type2",type2));
+
+        //System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+week);
+
+        httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+        HttpResponse httpresponse = httpClient.execute(httppost);
+        HttpEntity entity = httpresponse.getEntity();
+        //得到数据
+        String body = EntityUtils.toString(entity, "UTF-8");
+
+        Map<String,Object> bodym = new ObjectMapper().readValue(body,Map.class);
+        if(bodym.containsKey("weeks") && DataUtils.toMap(bodym.get("weeks")).containsKey("this_week")){
+
+            return  Integer.valueOf(DataUtils.toMap(bodym.get("weeks")).get("this_week").toString());
+        }else{
+
+            return null;
+        }
+
+
+    }
+
+    @SneakyThrows
+    private List<List<String>> getMatch(HistoryParamsData historyParamsData,Integer week){
+
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpPost httppost =  new HttpPost("http://info.sporttery.cn/football/history/action.php");
+        //组装参数
+        List<NameValuePair> params = new ArrayList<>();
+        String action  = historyParamsData.getAction();
+
+        Long cId  = historyParamsData.getCId();
+        Long competitionId  = historyParamsData.getCompetitionId();
+        Long gId = historyParamsData.getGId();
+        Long groups = historyParamsData.getGroups();
+        String orderType = historyParamsData.getOrderType();
+        Long rId = historyParamsData.getRId();
+        String roundType = historyParamsData.getRoundType();
+        Long sId = historyParamsData.getSId();
+        String tableType = historyParamsData.getTableType();
+        String type1 = historyParamsData.getType1();
+        String type2 = historyParamsData.getType2();
+        if(roundType.equals("cup")){
+
+            roundType = "table";
+        }
+        params.add(new BasicNameValuePair("action",action));
+        params.add(new BasicNameValuePair("c_id",String.valueOf(cId)));
+        params.add(new BasicNameValuePair("competition_id",String.valueOf(competitionId)));
+        params.add(new BasicNameValuePair("g_id",String.valueOf(gId)));
+        params.add(new BasicNameValuePair("groups",String.valueOf(groups)));
+        params.add(new BasicNameValuePair("order_type",orderType));
+        params.add(new BasicNameValuePair("r_id",String.valueOf(rId)));
+        params.add(new BasicNameValuePair("round_type",roundType));
+        params.add(new BasicNameValuePair("s_id",String.valueOf(sId)));
+        params.add(new BasicNameValuePair("table_type",tableType));
+        params.add(new BasicNameValuePair("type1",type1));
+        params.add(new BasicNameValuePair("type2",type2));
+        params.add(new BasicNameValuePair("week",String.valueOf(week)));
+
+        //System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+week);
+
+        httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+        HttpResponse httpresponse = httpClient.execute(httppost);
+        HttpEntity entity = httpresponse.getEntity();
+        //得到数据
+        String body = EntityUtils.toString(entity, "UTF-8");
+        if(body.contains("\"matches\":{\"result_str\":\" ") && body.lastIndexOf("<\\/table>\"")!=-1){
+
+            body = body.substring(body.indexOf("\"matches\":{\"result_str\":\" "), body.lastIndexOf("<\\/table>\""));
+            body = "<table>\n"
+                    + body.substring(body.indexOf("<tr>"))
+                    .replaceAll("\\\\r", "\n")
+                    .replaceAll("\\\\/", "/")
+                    .replaceAll("\\\\\"", "\"")
+                    .replaceAll("</liid>", "</li>")
+                    .replaceAll("&nbsp", "").replaceAll("gif\">", "gif\"/>")
+                    + "\n</table>";
+        }else{
+            return null;
+        }
+
+        SAXParserFactory factory = SAXParserFactory.newInstance();
+        SAXParser parser = factory.newSAXParser();
+        XMLReader reader = parser.getXMLReader();
+        List<List<String>> matches = new ArrayList<>();
+        reader.setContentHandler(new DefaultHandler() {
+
+            private List<String> match;
+
+            @Override
+            public void startElement(String uri, String localName, String qName, Attributes atts) throws SAXException {
+                if (qName.equals("td")) {
+                    if (match == null) {
+                        match = new ArrayList<>();
+                    }
+                }
+            }
+
+            @Override
+            public void endElement(String uri, String localName, String qName) throws SAXException {
+                if (qName.equals("tr")) {
+                    if (match != null) {
+                        if (14 == match.size()) {
+                            matches.add(match);
+                        }
+                        match = null;
+                    }
+                }
+            }
+
+            @Override
+            public void characters(char[] ch, int start, int length) throws SAXException {
+                if (match != null) {
+                    String s = new String(ch, start, length).trim().replaceAll("   ", " ");
+                    if (s.startsWith("\\u")) {
+                        s = convertUnicode(s);
+                    }
+                    if(s.equals("一 一 一")){
+                        match.add("一");
+                        match.add("一");
+                        match.add("一");
+                    }else {
+                        match.add(s);
+                    }
+                }
+            }
+        });
+        reader.parse(new InputSource(IOUtils.toInputStream(body, "UTF-8")));
+        return matches;
+    }
 
     public static String convertUnicode(String ori) {
         char aChar;
