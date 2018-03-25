@@ -31,6 +31,7 @@ import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 import org.xml.sax.helpers.DefaultHandler;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
@@ -225,6 +226,7 @@ public class HistoryCrawController {
 
                     //只采集联赛
                     if(isLeagueEnum == HistoryParamsData.IsLeague.Cup || isLeagueEnum == null){
+                        System.out.println("跳过联赛"+season_and_name);
                         continue;
                     }
 
@@ -247,6 +249,7 @@ public class HistoryCrawController {
                         historyParamsDatax.setType1("three_-1_e");
                         historyParamsDatax.setType2(type2);
                         if(this.getTotalNums(historyParamsDatax) == null){
+                            System.out.println("总轮次为空"+season_and_name);
                             continue;
                         }else{
                             totalnum = this.getTotalNums(historyParamsDatax);
@@ -278,6 +281,7 @@ public class HistoryCrawController {
                         Iterable<HistoryParamsData> iterable1 = historyParamsDataRepository.findAll(preciate);
                         Iterator<HistoryParamsData> iterator1 = iterable1.iterator();
                         if(iterator1.hasNext()){
+                            System.out.println("已插入跳过"+season_and_name);
                             continue;
                         }
 
@@ -311,6 +315,7 @@ public class HistoryCrawController {
         return "完成11";
     }
 
+    @PostConstruct
     @RequestMapping("/lc_match_details")
     @SneakyThrows
     public @ResponseBody String lc_match_details(){
