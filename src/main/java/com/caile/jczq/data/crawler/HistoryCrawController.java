@@ -315,7 +315,7 @@ public class HistoryCrawController {
         return "完成11";
     }
 
-    @PostConstruct
+    //@PostConstruct
     @RequestMapping("/lc_match_details")
     @SneakyThrows
     public @ResponseBody String lc_match_details(){
@@ -502,7 +502,6 @@ public class HistoryCrawController {
         String type1 = historyParamsData.getType1();
         String type2 = historyParamsData.getType2();
         if(roundType.equals("cup")){
-
             roundType = "table";
         }
         params.add(new BasicNameValuePair("action",action));
@@ -518,6 +517,9 @@ public class HistoryCrawController {
         params.add(new BasicNameValuePair("type1",type1));
         params.add(new BasicNameValuePair("type2",type2));
         params.add(new BasicNameValuePair("week",String.valueOf(week)));
+        if(rId==4987 && week==4){
+            System.out.println(params);
+        }
 
         //System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+week);
 
@@ -654,6 +656,87 @@ public class HistoryCrawController {
                 outBuffer.append(aChar);
         }
         return outBuffer.toString();
+    }
+
+    @PostConstruct
+    @SneakyThrows
+    public String bc_match_details(){
+        BooleanExpression preciate;
+        QHistoryParamsData qHistoryParamsData = QHistoryParamsData.historyParamsData;
+        preciate = qHistoryParamsData.isOk.eq(0).and(qHistoryParamsData.action.eq("bc"));
+
+        List<Sort.Order> orders = new ArrayList<>();
+        orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"id"));
+        orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"action"));
+
+        Iterable<HistoryParamsData> iterable = historyParamsDataRepository.findAll(preciate,new Sort(orders));
+
+        List<HistoryParamsData> historyParamsDataList = new ArrayList<>();
+        iterable.forEach(historyData->{
+            historyParamsDataList.add(historyData);
+        });
+
+        for (HistoryParamsData historyParamsData: historyParamsDataList) {
+            Integer week = historyParamsData.getWeek();
+
+            String seasonAndName = historyParamsData.getLeagueName();
+            String leagueName = seasonAndName.substring(0,seasonAndName.indexOf("20"));
+            String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
+
+            Integer nums = historyParamsData.getTotalNums();
+
+            while (week != -1){
+                List<List<String>> matches;
+                matches = this.getMatch(historyParamsData,week);
+
+                System.out.println("开始处理"+seasonAndName+"week::"+week+"action:bccc");
+
+                try {
+                    if (matches != null && matches.size() > 0) {
+                        for (List<String> match : matches) {
+
+                            HistoryMatchData old_historyMatchData =historyMatchDataRepository.findAllByHomeTeamAndAwayTeamAndLeagueNameAndSeasonAndWeek
+                                    (match.get(2),match.get(5), leagueName,season,String.valueOf(week));
+
+                            if(old_historyMatchData != null ){
+                                if(old_historyMatchData.getJczqWinFinalOdds() == null){
+                                    continue;
+                                }
+                                try {
+                                    old_historyMatchData.setJczqWinFirstOdds(new BigDecimal(match.get(6)).multiply(new BigDecimal("100")).longValue());
+                                } catch (Exception ex) {
+                                    //忽略数字异常
+                                }
+                                try {
+                                    old_historyMatchData.setJczqDrawFirstOdds(new BigDecimal(match.get(7)).multiply(new BigDecimal("100")).longValue());
+                                } catch (Exception ex) {
+                                    //忽略数字异常
+                                }
+                                try {
+                                    old_historyMatchData.setJczqLossFirstOdds(new BigDecimal(match.get(8)).multiply(new BigDecimal("100")).longValue());
+                                } catch (Exception ex) {
+                                    //忽略数字异常
+                                }
+                                historyMatchDataRepository.save(old_historyMatchData);
+                            }
+                        }
+                        if(week.equals(nums)){
+                            historyParamsData.setIsOk(1);
+                            historyParamsDataRepository.save(historyParamsData);
+                        }
+                        historyParamsData.setWeek(week);
+                        historyParamsDataRepository.save(historyParamsData);
+                        week++;
+                    } else {
+                        week = -1;
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    System.exit(0);
+                }
+            }
+        }
+        return "11";
     }
 
 
