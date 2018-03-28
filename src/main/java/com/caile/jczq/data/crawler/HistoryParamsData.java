@@ -100,6 +100,11 @@ public class HistoryParamsData {
     private Integer totalNums;
 
     /**
+     *比赛名称
+     */
+    private String matchName;
+
+    /**
      * 联赛或者杯赛
      */
     @Enumerated(EnumType.STRING)

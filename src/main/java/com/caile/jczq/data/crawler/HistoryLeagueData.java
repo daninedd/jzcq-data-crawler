@@ -50,4 +50,9 @@ public class HistoryLeagueData {
      * 创建时间
      * */
     private Date creationTime;
+
+    /**
+     * 是否联赛
+     * */
+
 }
