@@ -1,5 +1,6 @@
 package com.caile.jczq.data.crawler;
 
+import com.alibaba.fastjson.JSONObject;
 import com.caile.jczq.data.utill.DataUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -354,7 +355,7 @@ public class HistoryCrawController {
 
             while (week != -1){
                 List<List<String>> matches;
-                matches = this.getMatch(historyParamsData,week);
+                matches = this.getMatch(historyParamsData,week,false);
 
                 System.out.println("开始处理"+seasonAndName+"week::"+week);
 
@@ -494,7 +495,7 @@ public class HistoryCrawController {
      * 获取比赛详情
      * */
     @SneakyThrows
-    private List<List<String>> getMatch(HistoryParamsData historyParamsData,Integer week){
+    private List<List<String>> getMatch(HistoryParamsData historyParamsData,Integer week,Boolean isCup){
 
         HttpClient httpClient = HttpClientBuilder.create().build();
         HttpPost httppost =  new HttpPost("http://info.sporttery.cn/football/history/action.php");
@@ -513,9 +514,8 @@ public class HistoryCrawController {
         String tableType = historyParamsData.getTableType();
         String type1 = historyParamsData.getType1();
         String type2 = historyParamsData.getType2();
-        if(roundType.equals("cup")){
-            roundType = "table";
-        }
+        if(!isCup && roundType.equals("cup")) roundType = "table";
+
         params.add(new BasicNameValuePair("action",action));
         params.add(new BasicNameValuePair("c_id",String.valueOf(cId)));
         params.add(new BasicNameValuePair("competition_id",String.valueOf(competitionId)));
@@ -528,12 +528,9 @@ public class HistoryCrawController {
         params.add(new BasicNameValuePair("table_type",tableType));
         params.add(new BasicNameValuePair("type1",type1));
         params.add(new BasicNameValuePair("type2",type2));
-        params.add(new BasicNameValuePair("week",String.valueOf(week)));
-        if(rId==4987 && week==4){
-            System.out.println(params);
+        if(!isCup){
+            params.add(new BasicNameValuePair("week",String.valueOf(week)));
         }
-
-        //System.out.println("开始处理"+seasonAndName+"action:"+action+"week::"+week);
 
         httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
         HttpResponse httpresponse = httpClient.execute(httppost);
@@ -576,7 +573,7 @@ public class HistoryCrawController {
             public void endElement(String uri, String localName, String qName) throws SAXException {
                 if (qName.equals("tr")) {
                     if (match != null) {
-                        if (14 == match.size()) {
+                        if (match.size() != 0) {
                             matches.add(match);
                         }
                         match = null;
@@ -595,13 +592,102 @@ public class HistoryCrawController {
                         match.add("一");
                         match.add("一");
                         match.add("一");
-                    }else {
+                    }else if(s.isEmpty()){
+                        match.add("");
+                    } else {
                         match.add(s);
                     }
                 }
             }
         });
         reader.parse(new InputSource(IOUtils.toInputStream(body, "UTF-8")));
+        return matches;
+    }
+
+    /***
+     * 获取比赛详情--杯赛
+     * */
+    @SneakyThrows
+    private List<List<String>> getMatchCup(HistoryParamsData historyParamsData){
+
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpPost httppost =  new HttpPost("http://info.sporttery.cn/football/history/action.php");
+        //组装参数
+        List<NameValuePair> params = new ArrayList<>();
+        String action  = historyParamsData.getAction();
+
+        Long cId  = historyParamsData.getCId();
+        Long competitionId  = historyParamsData.getCompetitionId();
+        Long gId = historyParamsData.getGId();
+        Long groups = historyParamsData.getGroups();
+        String orderType = historyParamsData.getOrderType();
+        Long rId = historyParamsData.getRId();
+        String roundType = historyParamsData.getRoundType();
+        Long sId = historyParamsData.getSId();
+        String tableType = historyParamsData.getTableType();
+        String type1 = historyParamsData.getType1();
+        String type2 = historyParamsData.getType2();
+
+        params.add(new BasicNameValuePair("action",action));
+        params.add(new BasicNameValuePair("c_id",String.valueOf(cId)));
+        params.add(new BasicNameValuePair("competition_id",String.valueOf(competitionId)));
+        params.add(new BasicNameValuePair("g_id",String.valueOf(gId)));
+        params.add(new BasicNameValuePair("groups",String.valueOf(groups)));
+        params.add(new BasicNameValuePair("order_type",orderType));
+        params.add(new BasicNameValuePair("r_id",String.valueOf(rId)));
+        params.add(new BasicNameValuePair("round_type",roundType));
+        params.add(new BasicNameValuePair("s_id",String.valueOf(sId)));
+        params.add(new BasicNameValuePair("table_type",tableType));
+        params.add(new BasicNameValuePair("type1",type1));
+        params.add(new BasicNameValuePair("type2",type2));
+
+        httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+        HttpResponse httpresponse = httpClient.execute(httppost);
+        HttpEntity entity = httpresponse.getEntity();
+        //得到数据
+        String body = EntityUtils.toString(entity, "UTF-8");
+        JSONObject jsonObject = JSONObject.parseObject(body);
+        List<List<String>> matches = new ArrayList<>();
+        if(jsonObject.containsKey("matches")){
+            JSONObject jsonObject1 = jsonObject.getJSONObject("matches");
+            if(jsonObject1.containsKey("rscode") && jsonObject1.getString("rscode").equals("0")){
+                String results = jsonObject1.getString("result_str");
+                Document document = Jsoup.parse(results);
+                Elements allElements = document.getElementsByTag("tr");
+                //保留标题
+                Elements titleElements = allElements.tagName("th");
+                //去除标题
+                allElements.remove(0);
+                int length = allElements.size();
+                for (Element element: allElements
+                     ) {
+                    Elements tdElements = element.getElementsByTag("td");
+                    Elements oddsElements = element.getElementsByIndexEquals(6).first().getElementsByTag("span");
+                    tdElements.remove(6);
+                    tdElements.remove(6);
+                    tdElements.remove(6);
+                    List<String> list = new ArrayList<>();
+                    for (Element endElement: tdElements
+                         ) {
+                        String result = endElement.text();
+                        list.add(result);
+                    }
+                    for (Element oddElement: oddsElements
+                            ) {
+                        if(oddElement.text().equals("一 一 一")){
+                            list.add("一");
+                        }else{
+                            list.add(oddElement.text());
+                        }
+                    }
+                    matches.add(list);
+                }
+            }else{
+                return null;
+            }
+        }else{
+            return null;
+        }
         return matches;
     }
 
@@ -702,7 +788,7 @@ public class HistoryCrawController {
 
             while (week != -1){
                 List<List<String>> matches;
-                matches = this.getMatch(historyParamsData,week);
+                matches = this.getMatch(historyParamsData,week,false);
 
                 System.out.println("开始处理"+seasonAndName+"week::"+week+"action:bccc");
 
@@ -882,13 +968,17 @@ public class HistoryCrawController {
 
                         Elements elements = element2.getElementsByTag("td");
                         for (Element element1 : elements){
-                            //获取杯赛名称和r_id
+                            //获取杯赛名称和r_id和round_type
                             r_id = Long.valueOf(element1.id());
                             if(r_id==0){
                                 System.out.println("RID为0");
                                 System.exit(-1);
                             }
                             String matchName = element1.getElementsByTag("a").first().html();
+
+                            if(element1.hasAttr("round_type")){
+                                round_type = element1.attr("round_type");
+                            }
 
                             //循环初赔终赔
                             for (String[] act: actions) {
@@ -947,6 +1037,7 @@ public class HistoryCrawController {
     /**
      * 杯赛数据以及终赔
      * */
+    @PostConstruct
     @SneakyThrows
     public String cupDatas(){
 
@@ -965,8 +1056,95 @@ public class HistoryCrawController {
         });
 
         for (HistoryParamsData historyParamsData:historyParamsDataList){
+            String seasonAndName = historyParamsData.getLeagueName();
+            String leagueName = seasonAndName.substring(0,seasonAndName.indexOf("20"));
+            String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
+            String matchName = historyParamsData.getMatchName();
 
+            List<List<String>> matches;
+            matches = this.getMatchCup(historyParamsData);
 
+            try {
+                if(matches != null && matches.size()>0){
+                    for (List<String> match: matches
+                         ) {
+
+                        String fullScore = match.get(4);
+                        String halfScore = match.get(3);
+                        if(fullScore.isEmpty() || halfScore.isEmpty()) continue;
+                        String homeTeam = match.get(2).replaceAll("\u0000", "");
+                        String awayTeam = match.get(5).replaceAll("\u0000", "");
+                        String[] fullScores = match.get(4).split(":");
+                        Long fullHomeScore = Long.valueOf(fullScores[0]);
+                        Long fullAwayScore = Long.valueOf(fullScores[1]);
+                        String[] halfScores = match.get(3).split(":");
+                        Long halfHomeScore = Long.valueOf(halfScores[0]);
+                        Long halfAwayScore = Long.valueOf(halfScores[1]);
+                        String date = match.get(0);
+
+                        BooleanExpression expression;
+                        QHistoryMatchData qHistoryMatchData = QHistoryMatchData.historyMatchData;
+                        expression = qHistoryMatchData.homeTeam.eq(homeTeam).and(qHistoryMatchData.awayTeam.eq(awayTeam))
+                                .and(qHistoryMatchData.fullHomeScore.eq(fullHomeScore)).and(qHistoryMatchData.fullAwayScore.eq(fullAwayScore))
+                                .and(qHistoryMatchData.halfHomeScore.eq(halfHomeScore)).and(qHistoryMatchData.halfAwayScore.eq(halfAwayScore))
+                                .and(qHistoryMatchData.season.eq(season)).and(qHistoryMatchData.leagueName.eq(leagueName))
+                                .and(qHistoryMatchData.matchName.eq(matchName));
+                        Optional<HistoryMatchData> optional = historyMatchDataRepository.findOne(expression);
+                        HistoryMatchData oldhistoryMatchData = optional.orElse(null);
+                        if(oldhistoryMatchData == null){
+                            //没有插入过的话就插入
+                            HistoryMatchData historyMatchData = new HistoryMatchData();
+                            historyMatchData.setHomeTeam(homeTeam);
+                            historyMatchData.setAwayTeam(awayTeam);
+                            historyMatchData.setFullHomeScore(fullHomeScore);
+                            historyMatchData.setFullAwayScore(fullAwayScore);
+                            historyMatchData.setHalfHomeScore(halfHomeScore);
+                            historyMatchData.setHalfAwayScore(halfAwayScore);
+                            //更新获胜球队
+                            if(fullHomeScore > fullAwayScore){
+                                historyMatchData.setWinTeam(homeTeam);
+                            }else if(fullHomeScore < fullAwayScore){
+                                historyMatchData.setWinTeam(awayTeam);
+                            }else{
+                                historyMatchData.setWinTeam("平");
+                            }
+                            //更新赛季
+                            historyMatchData.setSeason(season);
+                            //更新联赛名称
+                            historyMatchData.setLeagueName(leagueName);
+                            //更新比赛名称
+                            historyMatchData.setMatchName(matchName);
+                            //更新比赛日期
+                            historyMatchData.setMatchDate(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(date));
+                            String winFinalOdds = match.get(6);
+                            String drawFinalOdds = match.get(7);
+                            String lossFinalOdds = match.get(8);
+                            try {
+                                historyMatchData.setJczqWinFinalOdds(new BigDecimal(winFinalOdds).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            try {
+                                historyMatchData.setJczqDrawFinalOdds(new BigDecimal(drawFinalOdds).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            try {
+                                historyMatchData.setJczqLossFinalOdds(new BigDecimal(lossFinalOdds).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            historyMatchDataRepository.save(historyMatchData);
+                        }
+
+                        System.out.println("完成"+leagueName+season+matchName);
+                    }
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            System.out.println("完成"+historyParamsData.getLeagueName());
         }
         return "ok";
     }

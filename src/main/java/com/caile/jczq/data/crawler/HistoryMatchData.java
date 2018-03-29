@@ -101,4 +101,9 @@ public class HistoryMatchData {
      * 联赛名称
      */
     private String  leagueName;
+
+    /**
+     * 比赛名称
+     */
+    private String  matchName;
 }
