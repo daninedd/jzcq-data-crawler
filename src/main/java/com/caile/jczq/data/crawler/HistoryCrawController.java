@@ -655,10 +655,8 @@ public class HistoryCrawController {
                 Document document = Jsoup.parse(results);
                 Elements allElements = document.getElementsByTag("tr");
                 //保留标题
-                Elements titleElements = allElements.tagName("th");
                 //去除标题
                 allElements.remove(0);
-                int length = allElements.size();
                 for (Element element: allElements
                      ) {
                     Elements tdElements = element.getElementsByTag("td");
@@ -1066,29 +1064,26 @@ public class HistoryCrawController {
 
             try {
                 if(matches != null && matches.size()>0){
+                    Boolean ok = true;
                     for (List<String> match: matches
                          ) {
 
                         String fullScore = match.get(4);
                         String halfScore = match.get(3);
-                        if(fullScore.isEmpty() || halfScore.isEmpty()) continue;
+                        if(fullScore.isEmpty() && halfScore.isEmpty() && season.equals("2017/2018")){
+                            ok = false;
+                            continue;
+                        }
                         String homeTeam = match.get(2).replaceAll("\u0000", "");
                         String awayTeam = match.get(5).replaceAll("\u0000", "");
-                        String[] fullScores = match.get(4).split(":");
-                        Long fullHomeScore = Long.valueOf(fullScores[0]);
-                        Long fullAwayScore = Long.valueOf(fullScores[1]);
-                        String[] halfScores = match.get(3).split(":");
-                        Long halfHomeScore = Long.valueOf(halfScores[0]);
-                        Long halfAwayScore = Long.valueOf(halfScores[1]);
                         String date = match.get(0);
 
                         BooleanExpression expression;
                         QHistoryMatchData qHistoryMatchData = QHistoryMatchData.historyMatchData;
                         expression = qHistoryMatchData.homeTeam.eq(homeTeam).and(qHistoryMatchData.awayTeam.eq(awayTeam))
-                                .and(qHistoryMatchData.fullHomeScore.eq(fullHomeScore)).and(qHistoryMatchData.fullAwayScore.eq(fullAwayScore))
-                                .and(qHistoryMatchData.halfHomeScore.eq(halfHomeScore)).and(qHistoryMatchData.halfAwayScore.eq(halfAwayScore))
                                 .and(qHistoryMatchData.season.eq(season)).and(qHistoryMatchData.leagueName.eq(leagueName))
-                                .and(qHistoryMatchData.matchName.eq(matchName));
+                                .and(qHistoryMatchData.matchName.eq(matchName)).and(qHistoryMatchData.matchDate.eq(
+                                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(date) ));
                         Optional<HistoryMatchData> optional = historyMatchDataRepository.findOne(expression);
                         HistoryMatchData oldhistoryMatchData = optional.orElse(null);
                         if(oldhistoryMatchData == null){
@@ -1096,18 +1091,31 @@ public class HistoryCrawController {
                             HistoryMatchData historyMatchData = new HistoryMatchData();
                             historyMatchData.setHomeTeam(homeTeam);
                             historyMatchData.setAwayTeam(awayTeam);
-                            historyMatchData.setFullHomeScore(fullHomeScore);
-                            historyMatchData.setFullAwayScore(fullAwayScore);
-                            historyMatchData.setHalfHomeScore(halfHomeScore);
-                            historyMatchData.setHalfAwayScore(halfAwayScore);
-                            //更新获胜球队
-                            if(fullHomeScore > fullAwayScore){
-                                historyMatchData.setWinTeam(homeTeam);
-                            }else if(fullHomeScore < fullAwayScore){
-                                historyMatchData.setWinTeam(awayTeam);
-                            }else{
-                                historyMatchData.setWinTeam("平");
+                            if(!fullScore.isEmpty() && fullScore.length()>1){
+
+                                String[] fullScores = fullScore.split(":");
+                                Long fullHomeScore = Long.valueOf(fullScores[0]);
+                                Long fullAwayScore = Long.valueOf(fullScores[1]);
+                                historyMatchData.setFullHomeScore(fullHomeScore);
+                                historyMatchData.setFullAwayScore(fullAwayScore);
+                                //更新获胜球队
+                                if(fullHomeScore > fullAwayScore){
+                                    historyMatchData.setWinTeam(homeTeam);
+                                }else if(fullHomeScore < fullAwayScore){
+                                    historyMatchData.setWinTeam(awayTeam);
+                                }else{
+                                    historyMatchData.setWinTeam("平");
+                                }
                             }
+                            if(!halfScore.isEmpty()){
+
+                                String[] halfScores = halfScore.split(":");
+                                Long halfHomeScore = Long.valueOf(halfScores[0]);
+                                Long halfAwayScore = Long.valueOf(halfScores[1]);
+                                historyMatchData.setHalfHomeScore(halfHomeScore);
+                                historyMatchData.setHalfAwayScore(halfAwayScore);
+                            }
+
                             //更新赛季
                             historyMatchData.setSeason(season);
                             //更新联赛名称
@@ -1135,9 +1143,20 @@ public class HistoryCrawController {
                                 //忽略数字异常
                             }
                             historyMatchDataRepository.save(historyMatchData);
+                        }else{
+                            System.out.println("跳过"+leagueName+season+matchName);
                         }
 
                         System.out.println("完成"+leagueName+season+matchName);
+                    }
+                    //如果都采集完的话就更新Ok
+                    QHistoryMatchData qHistoryMatchData = QHistoryMatchData.historyMatchData;
+                    BooleanExpression expression1 = qHistoryMatchData.leagueName.eq(leagueName).and(qHistoryMatchData.season.eq(season))
+                            .and(qHistoryMatchData.matchName.eq(matchName));
+                    Long matchLength = historyMatchDataRepository.count(expression1);
+                    if(matches.size() == matchLength && ok){
+                        historyParamsData.setIsOk(1);
+                        historyParamsDataRepository.save(historyParamsData);
                     }
                 }
 
