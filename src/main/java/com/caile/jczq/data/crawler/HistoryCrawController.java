@@ -1,5 +1,6 @@
 package com.caile.jczq.data.crawler;
 
+import com.alibaba.fastjson.JSONException;
 import com.alibaba.fastjson.JSONObject;
 import com.caile.jczq.data.utill.DataUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,13 +9,18 @@ import lombok.SneakyThrows;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpVersion;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.protocol.HTTP;
 import org.apache.http.util.EntityUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -36,6 +42,7 @@ import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URL;
@@ -610,8 +617,14 @@ public class HistoryCrawController {
     @SneakyThrows
     private List<List<String>> getMatchCup(HistoryParamsData historyParamsData){
 
-        HttpClient httpClient = HttpClientBuilder.create().build();
-        HttpPost httppost =  new HttpPost("http://info.sporttery.cn/football/history/action.php");
+//        HttpClient httpClient = HttpClientBuilder.create().build();
+//        HttpPost httppost =  new HttpPost("http://info.sporttery.cn/football/history/action.php");
+
+        //创建httpclient对象
+        CloseableHttpClient httpClient = HttpClients.createDefault();
+        //创建post方式请求对象
+        HttpPost httppost = new HttpPost("http://info.sporttery.cn/football/history/action.php");
+
         //组装参数
         List<NameValuePair> params = new ArrayList<>();
         String action  = historyParamsData.getAction();
@@ -640,53 +653,233 @@ public class HistoryCrawController {
         params.add(new BasicNameValuePair("table_type",tableType));
         params.add(new BasicNameValuePair("type1",type1));
         params.add(new BasicNameValuePair("type2",type2));
+        if(historyParamsData.getCId()==604 && rId==13206){
+
+            params.set(4,new BasicNameValuePair("groups","16"));
+            System.out.println(params);
+        }
 
         httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
-        HttpResponse httpresponse = httpClient.execute(httppost);
-        HttpEntity entity = httpresponse.getEntity();
-        //得到数据
-        String body = EntityUtils.toString(entity, "UTF-8");
-        JSONObject jsonObject = JSONObject.parseObject(body);
-        List<List<String>> matches = new ArrayList<>();
-        if(jsonObject.containsKey("matches")){
-            JSONObject jsonObject1 = jsonObject.getJSONObject("matches");
-            if(jsonObject1.containsKey("rscode") && jsonObject1.getString("rscode").equals("0")){
-                String results = jsonObject1.getString("result_str");
-                Document document = Jsoup.parse(results);
-                Elements allElements = document.getElementsByTag("tr");
-                //保留标题
-                //去除标题
-                allElements.remove(0);
-                for (Element element: allElements
-                     ) {
-                    Elements tdElements = element.getElementsByTag("td");
-                    Elements oddsElements = element.getElementsByIndexEquals(6).first().getElementsByTag("span");
-                    tdElements.remove(6);
-                    tdElements.remove(6);
-                    tdElements.remove(6);
-                    List<String> list = new ArrayList<>();
-                    for (Element endElement: tdElements
-                         ) {
-                        String result = endElement.text();
-                        list.add(result);
-                    }
-                    for (Element oddElement: oddsElements
-                            ) {
-                        if(oddElement.text().equals("一 一 一")){
-                            list.add("一");
-                        }else{
-                            list.add(oddElement.text());
+        try {
+            //int code = httpClient.execute(httppost).getStatusLine().getStatusCode();
+            //HttpResponse httpresponse = httpClient.execute(httppost);
+//            httppost.setProtocolVersion(HttpVersion.HTTP_1_0);
+//            httppost.addHeader(HTTP.CONN_DIRECTIVE, HTTP.CONN_CLOSE);
+
+            CloseableHttpResponse response = httpClient.execute(httppost);
+            HttpEntity entity = response.getEntity();
+            //得到数据
+            String body = EntityUtils.toString(entity, "UTF-8");
+            response.close();
+            httpClient.close();
+            List<List<String>> matches = new ArrayList<>();
+            try {
+                JSONObject jsonObject = JSONObject.parseObject(body);
+                if(jsonObject.containsKey("matches")){
+                    //if result has week :foreach week
+                    if(jsonObject.containsKey("weeks")){
+                        JSONObject jsonObjectWeek = jsonObject.getJSONObject("weeks");
+                        if(jsonObjectWeek.containsKey("rscode") && jsonObjectWeek.getString("rscode").equals("0")
+                                && jsonObjectWeek.containsKey("this_week")){
+
+                            Long weeks = Long.valueOf(jsonObjectWeek.getString("this_week"));
+                            for (int i=1;i<=weeks;i++) {
+                                //再次请求action.php
+                                CloseableHttpClient httpClientWeek = HttpClients.createDefault();
+                                //创建post方式请求对象
+                                HttpPost httpPostWeek = new HttpPost("http://info.sporttery.cn/football/history/action.php");
+
+                                //组装参数
+                                String actionWeek = "lc";
+                                params.remove(0);
+                                params.add(new BasicNameValuePair("action",actionWeek));
+                                httpPostWeek.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+                                CloseableHttpResponse responseWeek = httpClientWeek.execute(httpPostWeek);
+                                HttpEntity entityWeek = responseWeek.getEntity();
+                                //得到数据
+                                String bodyWeek = EntityUtils.toString(entityWeek, "UTF-8");
+                                response.close();
+                                httpClient.close();
+
+                                try{
+                                    JSONObject jsonObjectWeekResults = JSONObject.parseObject(bodyWeek);
+                                    if(jsonObjectWeekResults.containsKey("matches")){
+                                        JSONObject jsonObjectWeekResult = jsonObjectWeekResults.getJSONObject("matches");
+                                        if(jsonObjectWeekResult.containsKey("rscode") && jsonObjectWeekResult.getString("rscode").equals("0")){
+                                            String resultsWeek = jsonObjectWeekResult.getString("result_str");
+                                            Document documentWeek = Jsoup.parse(resultsWeek);
+                                            Elements allElementsWeek = documentWeek.getElementsByTag("tr");
+                                            //保留标题
+                                            //去除标题
+                                            allElementsWeek.remove(0);
+                                            for (Element elementWeek: allElementsWeek
+                                                    ) {
+                                                Elements tdElementsWeek = elementWeek.getElementsByTag("td");
+                                                Elements oddsElementsWeek = elementWeek.getElementsByIndexEquals(6).first().getElementsByTag("span");
+                                                tdElementsWeek.remove(6);
+                                                tdElementsWeek.remove(6);
+                                                tdElementsWeek.remove(6);
+
+                                                List<String> listWeek = new ArrayList<>();
+                                                for (Element endElementWeek: tdElementsWeek
+                                                        ) {
+                                                    String result = endElementWeek.text();
+                                                    listWeek.add(result);
+                                                }
+                                                for (Element oddElementWeek: oddsElementsWeek
+                                                        ) {
+                                                    if(oddElementWeek.text().equals("一 一 一")){
+                                                        listWeek.add("一");
+                                                    }else{
+                                                        listWeek.add(oddElementWeek.text());
+                                                    }
+                                                }
+                                                matches.add(listWeek);
+                                            }
+                                        }else{
+                                            return null;
+                                        }
+
+                                    }else{
+                                        return null;
+                                    }
+                                }catch (Exception e){
+                                    e.printStackTrace();
+                                }
+
+                            }
+
                         }
                     }
-                    matches.add(list);
+                    if(jsonObject.containsKey("groups")){
+                        JSONObject jsonObjectGroup = jsonObject.getJSONObject("groups");
+                        if(jsonObjectGroup.containsKey("rscode") && jsonObjectGroup.getString("rscode").equals("0")
+                                && jsonObjectGroup.containsKey("result_str")){
+                            String groupsResults = jsonObjectGroup.getString("result_str");
+                            Document documentGroup = Jsoup.parse(groupsResults);
+                            Elements allElementsGroup = documentGroup.getElementsByTag("td");
+                            int groups_g = allElementsGroup.size();
+                            for (Element elementGroup:allElementsGroup) {
+
+                                //再次请求action.php
+                                CloseableHttpClient httpClientGroup = HttpClients.createDefault();
+                                //创建post方式请求对象
+                                HttpPost httpPostGroup = new HttpPost("http://info.sporttery.cn/football/history/action.php");
+
+                                //组装参数
+                                params.set(0,new BasicNameValuePair("action","group"));
+                                params.set(3,new BasicNameValuePair("g_id",String.valueOf(elementGroup.id())));
+                                params.set(4,new BasicNameValuePair("groups",String.valueOf(groups_g)));
+                                httpPostGroup.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+                                CloseableHttpResponse responseGroup = httpClientGroup.execute(httpPostGroup);
+                                HttpEntity entityGroup = responseGroup.getEntity();
+                                //得到数据
+                                String bodyGroup = EntityUtils.toString(entityGroup, "UTF-8");
+                                response.close();
+                                httpClient.close();
+
+                                try{
+                                    JSONObject jsonObjectGroupResults = JSONObject.parseObject(bodyGroup);
+                                    if(jsonObjectGroupResults.containsKey("matches")){
+                                        JSONObject jsonObjectGroupResult = jsonObjectGroupResults.getJSONObject("matches");
+                                        if(jsonObjectGroupResult.containsKey("rscode") && jsonObjectGroupResult.getString("rscode").equals("0")){
+                                            String resultsGroup = jsonObjectGroupResult.getString("result_str");
+                                            Document documentGroupResult = Jsoup.parse(resultsGroup);
+                                            Elements allElementsGroupResults = documentGroupResult.getElementsByTag("tr");
+                                            //保留标题
+                                            //去除标题
+                                            allElementsGroupResults.remove(0);
+                                            for (Element elementGroup_s: allElementsGroupResults
+                                                    ) {
+                                                Elements tdElementsGroup = elementGroup_s.getElementsByTag("td");
+                                                Elements oddsElementsGroup = elementGroup_s.getElementsByIndexEquals(6).first().getElementsByTag("span");
+                                                tdElementsGroup.remove(6);
+                                                tdElementsGroup.remove(6);
+                                                tdElementsGroup.remove(6);
+
+                                                List<String> listWeek = new ArrayList<>();
+                                                for (Element endElementWeek: tdElementsGroup
+                                                        ) {
+                                                    String result = endElementWeek.text();
+                                                    listWeek.add(result);
+                                                }
+                                                for (Element oddElementWeek: oddsElementsGroup
+                                                        ) {
+                                                    if(oddElementWeek.text().equals("一 一 一") || oddElementWeek.text().isEmpty()){
+                                                        listWeek.add("一");
+                                                    }else{
+                                                        listWeek.add(oddElementWeek.text());
+                                                    }
+                                                }
+                                                matches.add(listWeek);
+                                            }
+                                        }else{
+                                            return null;
+                                        }
+
+                                    }else{
+                                        return null;
+                                    }
+                                }catch (Exception e){
+                                    e.printStackTrace();
+                                }
+
+                            }
+                        }
+                    }
+                    if(jsonObject.containsKey("matches") && !jsonObject.containsKey("weeks") && !jsonObject.containsKey("groups")){
+                        JSONObject jsonObject1 = jsonObject.getJSONObject("matches");
+                        if(jsonObject1.containsKey("rscode") && jsonObject1.getString("rscode").equals("0")){
+                            String results = jsonObject1.getString("result_str");
+                            Document document = Jsoup.parse(results);
+                            Elements allElements = document.getElementsByTag("tr");
+                            //保留标题
+                            //去除标题
+                            allElements.remove(0);
+                            for (Element element: allElements
+                                    ) {
+                                Elements tdElements = element.getElementsByTag("td");
+                                Elements oddsElements = element.getElementsByIndexEquals(6).first().getElementsByTag("span");
+                                tdElements.remove(6);
+                                tdElements.remove(6);
+                                tdElements.remove(6);
+                                List<String> list = new ArrayList<>();
+                                for (Element endElement: tdElements
+                                        ) {
+                                    String result = endElement.text();
+                                    list.add(result);
+                                }
+                                for (Element oddElement: oddsElements
+                                        ) {
+                                    if(oddElement.text().equals("一 一 一")){
+                                        list.add("一");
+                                    }else{
+                                        list.add(oddElement.text());
+                                    }
+                                }
+                                matches.add(list);
+                            }
+                        }else{
+                            return null;
+                        }
+                    }
+                }else{
+                    return null;
                 }
-            }else{
-                return null;
+                return matches;
+            } catch (Exception e) {
+                System.out.println(body);
+                e.printStackTrace();
+                //System.exit(-1);
             }
-        }else{
-            return null;
+
+        } catch (IOException e) {
+            e.getMessage().equals("Connection reset");
+            System.out.println(httppost);
+            httpClient.close();
+            e.printStackTrace();
         }
-        return matches;
+        return null;
     }
 
     public static String convertUnicode(String ori) {
@@ -762,7 +955,8 @@ public class HistoryCrawController {
     public String tableFirst(){
         BooleanExpression preciate;
         QHistoryParamsData qHistoryParamsData = QHistoryParamsData.historyParamsData;
-        preciate = qHistoryParamsData.isOk.eq(0).and(qHistoryParamsData.action.eq("bc"));
+        preciate = qHistoryParamsData.isOk.eq(0).and(qHistoryParamsData.action.eq("bc"))
+        .and(qHistoryParamsData.isLeague.eq(HistoryParamsData.IsLeague.Table));
 
         List<Sort.Order> orders = new ArrayList<>();
         orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"id"));
@@ -1171,9 +1365,107 @@ public class HistoryCrawController {
     /**
      * 杯赛初赔
      * */
+    //@PostConstruct
     @SneakyThrows
     public String cupFirst(){
+        BooleanExpression preciate;
+        QHistoryParamsData qHistoryParamsData = QHistoryParamsData.historyParamsData;
+        preciate = qHistoryParamsData.isOk.eq(0).and(qHistoryParamsData.action.eq("bc")).
+                and(qHistoryParamsData.isLeague.eq(HistoryParamsData.IsLeague.Cup));
 
-        return "ok";
+        List<Sort.Order> orders = new ArrayList<>();
+        orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"id"));
+        orders.add(new Sort.Order(Sort.Direction.fromString("asc"),"action"));
+
+        Iterable<HistoryParamsData> iterable = historyParamsDataRepository.findAll(preciate,new Sort(orders));
+
+        List<HistoryParamsData> historyParamsDataList = new ArrayList<>();
+        iterable.forEach(historyData->{
+            historyParamsDataList.add(historyData);
+        });
+
+        for (HistoryParamsData historyParamsData:historyParamsDataList){
+            String seasonAndName = historyParamsData.getLeagueName();
+            String leagueName = seasonAndName.substring(0,seasonAndName.indexOf("20"));
+            String season = seasonAndName.substring(seasonAndName.indexOf("20"),seasonAndName.lastIndexOf("赛季"));
+            String matchName = historyParamsData.getMatchName();
+
+            List<List<String>> matches;
+            if(historyParamsData.getCId()==856 && historyParamsData.getRId()==8223){
+
+                System.out.println(historyParamsData);
+            }
+            matches = this.getMatchCup(historyParamsData);
+
+
+            try {
+
+                if(matches != null && matches.size()>0){
+                    Boolean ok = true;
+                    for (List<String> match: matches
+                            ) {
+
+                        String winFinalOdds = match.get(6);
+                        String drawFinalOdds = match.get(7);
+                        String lossFinalOdds = match.get(8);
+                        String fullScore = match.get(4);
+                        String halfScore = match.get(3);
+                        if(fullScore.isEmpty() && halfScore.isEmpty() && season.equals("2017/2018")){
+                            ok = false;
+                            continue;
+                        }
+                        if(winFinalOdds.isEmpty() || drawFinalOdds.isEmpty() || lossFinalOdds.isEmpty()) continue;
+                        String homeTeam = match.get(2).replaceAll("\u0000", "");
+                        String awayTeam = match.get(5).replaceAll("\u0000", "");
+                        String date = match.get(0);
+
+                        BooleanExpression expression;
+                        QHistoryMatchData qHistoryMatchData = QHistoryMatchData.historyMatchData;
+                        expression = qHistoryMatchData.homeTeam.eq(homeTeam).and(qHistoryMatchData.awayTeam.eq(awayTeam))
+                                .and(qHistoryMatchData.season.eq(season)).and(qHistoryMatchData.leagueName.eq(leagueName))
+                                .and(qHistoryMatchData.matchName.eq(matchName)).and(qHistoryMatchData.matchDate.eq(
+                                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(date) ));
+                        Optional<HistoryMatchData> optional = historyMatchDataRepository.findOne(expression);
+                        HistoryMatchData oldhistoryMatchData = optional.orElse(null);
+                        if(oldhistoryMatchData != null){
+                            //数据库中存在
+                            try {
+                                oldhistoryMatchData.setJczqWinFirstOdds(new BigDecimal(winFinalOdds).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            try {
+                                oldhistoryMatchData.setJczqDrawFirstOdds(new BigDecimal(drawFinalOdds).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            try {
+                                oldhistoryMatchData.setJczqLossFirstOdds(new BigDecimal(lossFinalOdds).multiply(new BigDecimal("100")).longValue());
+                            } catch (Exception ex) {
+                                //忽略数字异常
+                            }
+                            historyMatchDataRepository.save(oldhistoryMatchData);
+                        }else{
+                            System.out.println("跳过"+leagueName+season+matchName);
+                        }
+
+                        System.out.println("完成"+leagueName+season+matchName);
+                    }
+                    //如果都采集完的话就更新Ok
+                    QHistoryMatchData qHistoryMatchData = QHistoryMatchData.historyMatchData;
+                    BooleanExpression expression1 = qHistoryMatchData.leagueName.eq(leagueName).and(qHistoryMatchData.season.eq(season))
+                            .and(qHistoryMatchData.matchName.eq(matchName));
+                    Long matchLength = historyMatchDataRepository.count(expression1);
+                    if(matches.size() == matchLength && ok){
+                        historyParamsData.setIsOk(1);
+                        historyParamsDataRepository.save(historyParamsData);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            System.out.println("完成"+historyParamsData.getLeagueName());
+        }
+        return "11";
     }
 }
