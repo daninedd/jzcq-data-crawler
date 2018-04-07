@@ -641,6 +641,11 @@ public class HistoryCrawController {
         String type1 = historyParamsData.getType1();
         String type2 = historyParamsData.getType2();
 
+/*        if(cId==604&&rId==9263&&sId==2774){
+
+            System.out.println(historyParamsData);
+        }*/
+
         params.add(new BasicNameValuePair("action",action));
         params.add(new BasicNameValuePair("c_id",String.valueOf(cId)));
         params.add(new BasicNameValuePair("competition_id",String.valueOf(competitionId)));
@@ -653,11 +658,6 @@ public class HistoryCrawController {
         params.add(new BasicNameValuePair("table_type",tableType));
         params.add(new BasicNameValuePair("type1",type1));
         params.add(new BasicNameValuePair("type2",type2));
-        if(historyParamsData.getCId()==604 && rId==13206){
-
-            params.set(4,new BasicNameValuePair("groups","16"));
-            System.out.println(params);
-        }
 
         httppost.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
         try {
@@ -1171,6 +1171,9 @@ public class HistoryCrawController {
                             if(element1.hasAttr("round_type")){
                                 round_type = element1.attr("round_type");
                             }
+                            if(element1.hasAttr("groups")){
+                                groups = Long.valueOf(element1.attr("groups"));
+                            }
 
                             //循环初赔终赔
                             for (String[] act: actions) {
@@ -1256,7 +1259,7 @@ public class HistoryCrawController {
             List<List<String>> matches;
             matches = this.getMatchCup(historyParamsData);
 
-            try {
+          try {
                 if(matches != null && matches.size()>0){
                     Boolean ok = true;
                     for (List<String> match: matches
